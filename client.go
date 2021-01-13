@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type Transporter interface {
@@ -24,6 +25,7 @@ type TokenMsg struct {
 type HuaweiClient struct {
 	appId     string
 	token     string
+	tokenExpire int
 	appSecret string
 	client    Transporter
 }
@@ -101,6 +103,7 @@ func (c *HuaweiClient) requestToken(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	c.tokenExpire = int(time.Now().Unix()) + token.ExpiresIn
 	return token.AccessToken, nil
 }
 
@@ -175,11 +178,9 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 		return nil, err
 	}
 
-	// initial send call after client init
-	if c.token == "" {
-		if err := c.refreshToken(ctx); err != nil {
-			return nil, err
-		}
+	// check token expire
+	if err := c.checkTokenExpire(ctx); err != nil{
+		return nil, err
 	}
 
 	request := NewHTTPRequest().
@@ -194,4 +195,34 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 		return resp, err
 	}
 	return resp, err
+}
+
+func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
+	if int64(c.tokenExpire) < time.Now().Unix() { // expire
+		// get new token
+		if err := c.refreshToken(ctx); err != nil{
+			return err
+		}
+		if tokenCache != nil{
+			// get cache
+			ti, err := tokenCache.Get()
+			if err != nil{
+				return err
+			}
+			if ti == nil{
+				// set cache
+				if err := tokenCache.Set(&TokenInfo{
+					Token: c.token,
+					TokenExpireTime: int64(c.tokenExpire),
+					KeyExpire: int64(c.tokenExpire),
+				}); err != nil{
+					return err
+				}
+			}else {
+				c.token = ti.Token
+				c.tokenExpire = int(ti.TokenExpireTime)
+			}
+		}
+	}
+	return nil
 }
