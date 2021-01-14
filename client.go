@@ -214,7 +214,7 @@ func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
 				if err := tokenCache.Set(&TokenInfo{
 					Token: c.token,
 					TokenExpireTime: int64(c.tokenExpire),
-					KeyExpire: int64(c.tokenExpire),
+					KeyExpire: int64(c.tokenExpire) - time.Now().Unix(),
 				}); err != nil{
 					return err
 				}
