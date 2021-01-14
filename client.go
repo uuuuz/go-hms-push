@@ -219,8 +219,8 @@ func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
 	return nil
 }
 
-func (c *HuaweiClient) GetTokenByRequest(ctx context.Context, appSecret string) (*TokenInfo, error){
-	u, _ := url.Parse(appSecret)
+func (c *HuaweiClient) GetTokenByRequest(ctx context.Context) (*TokenInfo, error){
+	u, _ := url.Parse(c.appSecret)
 	body := fmt.Sprintf("grant_type=client_credentials&client_secret=%s&client_id=%s", u.String(), c.appId)
 
 	request := NewHTTPRequest().
