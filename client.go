@@ -199,30 +199,56 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 
 func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
 	if int64(c.tokenExpire) < time.Now().Unix() { // expire
-		// get new token
-		if err := c.refreshToken(ctx); err != nil{
-			return err
-		}
 		if tokenCache != nil{
 			// get cache
-			ti, err := tokenCache.Get()
+			ti, err := tokenCache.TokenCache()
 			if err != nil{
 				return err
 			}
-			if ti == nil{
-				// set cache
-				if err := tokenCache.Set(&TokenInfo{
-					Token: c.token,
-					TokenExpireTime: int64(c.tokenExpire),
-					KeyExpire: int64(c.tokenExpire) - time.Now().Unix(),
-				}); err != nil{
-					return err
-				}
-			}else {
+			if ti != nil{
 				c.token = ti.Token
 				c.tokenExpire = int(ti.TokenExpireTime)
+			}
+		}else{
+			// get new token
+			if err := c.refreshToken(ctx); err != nil{
+				return err
 			}
 		}
 	}
 	return nil
+}
+
+func (c *HuaweiClient) GetTokenByRequest(ctx context.Context, appSecret string) (*TokenInfo, error){
+	u, _ := url.Parse(appSecret)
+	body := fmt.Sprintf("grant_type=client_credentials&client_secret=%s&client_id=%s", u.String(), c.appId)
+
+	request := NewHTTPRequest().
+		SetMethod(http.MethodPost).
+		SetURL(authUrl).
+		SetStringBody(body).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.client.Send(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Status != http.StatusOK {
+		return nil, errors.New("fail get token")
+	}
+
+	respDecoder := json.NewDecoder(resp.Body)
+	defer resp.Body.Close()
+
+	var token TokenMsg
+	if err := respDecoder.Decode(&token); err != nil {
+		return nil, err
+	}
+
+	return &TokenInfo{
+		Token: token.AccessToken,
+		TokenExpireTime: time.Now().Unix() + int64(token.ExpiresIn),
+		KeyExpire: int64(token.ExpiresIn),
+	}, nil
 }
