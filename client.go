@@ -198,22 +198,20 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 }
 
 func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
-	if int64(c.tokenExpire) < time.Now().Unix() { // expire
-		if tokenCache != nil{
-			// get cache
-			ti, err := tokenCache.TokenCache()
-			if err != nil{
-				return err
-			}
-			if ti != nil{
-				c.token = ti.Token
-				c.tokenExpire = int(ti.TokenExpireTime)
-			}
-		}else{
-			// get new token
-			if err := c.refreshToken(ctx); err != nil{
-				return err
-			}
+	if tokenCache != nil{
+		// get cache
+		ti, err := tokenCache.TokenCache()
+		if err != nil{
+			return err
+		}
+		if ti != nil{
+			c.token = ti.Token
+			c.tokenExpire = int(ti.TokenExpireTime)
+		}
+	}else{
+		// get new token
+		if err := c.refreshToken(ctx); err != nil{
+			return err
 		}
 	}
 	return nil
