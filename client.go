@@ -23,16 +23,17 @@ type TokenMsg struct {
 }
 
 type HuaweiClient struct {
-	appId     string
-	token     string
+	appId       string
+	token       string
 	tokenExpire int
-	appSecret string
-	client    Transporter
+	appSecret   string
+	client      Transporter
+	tokenCache  TokenCache
 }
 
 // NewClient creates a instance of the huawei cloud common client
 // It's contained in huawei cloud app and provides service through huawei cloud app
-func NewHuaweiClient(appId, appSecret string) (*HuaweiClient, error) {
+func NewHuaweiClient(appId, appSecret string, tokenCache TokenCache) (*HuaweiClient, error) {
 	if appId == "" {
 		return nil, errors.New("appId can't be empty")
 	}
@@ -43,14 +44,15 @@ func NewHuaweiClient(appId, appSecret string) (*HuaweiClient, error) {
 	}
 
 	return &HuaweiClient{
-		appId:     appId,
-		appSecret: appSecret,
-		client:    client,
+		appId:      appId,
+		appSecret:  appSecret,
+		client:     client,
+		tokenCache: tokenCache,
 	}, nil
 }
 
-func NewHuaweiClientWithTransport(appId, appSecret string, transport Transporter) (*HuaweiClient, error) {
-	client, err := NewHuaweiClient(appId, appSecret)
+func NewHuaweiClientWithTransport(appId, appSecret string, transport Transporter, tokenCache TokenCache) (*HuaweiClient, error) {
+	client, err := NewHuaweiClient(appId, appSecret, tokenCache)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +181,7 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 	}
 
 	// check token expire
-	if err := c.checkTokenExpire(ctx); err != nil{
+	if err := c.checkTokenExpire(ctx); err != nil {
 		return nil, err
 	}
 
@@ -198,26 +200,26 @@ func (c *HuaweiClient) SendMessage(ctx context.Context, msgRequest *HuaweiMessag
 }
 
 func (c *HuaweiClient) checkTokenExpire(ctx context.Context) error {
-	if tokenCache != nil{
+	if c.tokenCache != nil {
 		// get cache
-		ti, err := tokenCache.TokenCache()
-		if err != nil{
+		ti, err := c.tokenCache.TokenCache()
+		if err != nil {
 			return err
 		}
-		if ti != nil{
+		if ti != nil {
 			c.token = ti.Token
 			c.tokenExpire = int(ti.TokenExpireTime)
 		}
-	}else{
+	} else {
 		// get new token
-		if err := c.refreshToken(ctx); err != nil{
+		if err := c.refreshToken(ctx); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *HuaweiClient) GetTokenByRequest(ctx context.Context) (*TokenInfo, error){
+func (c *HuaweiClient) GetTokenByRequest(ctx context.Context) (*TokenInfo, error) {
 	u, _ := url.Parse(c.appSecret)
 	body := fmt.Sprintf("grant_type=client_credentials&client_secret=%s&client_id=%s", u.String(), c.appId)
 
@@ -245,8 +247,8 @@ func (c *HuaweiClient) GetTokenByRequest(ctx context.Context) (*TokenInfo, error
 	}
 
 	return &TokenInfo{
-		Token: token.AccessToken,
+		Token:           token.AccessToken,
 		TokenExpireTime: time.Now().Unix() + int64(token.ExpiresIn),
-		KeyExpire: int64(token.ExpiresIn),
+		KeyExpire:       int64(token.ExpiresIn),
 	}, nil
 }
